@@ -89,5 +89,10 @@
   },
   "engines": {
     "node": ">=14.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@solana/web3.js": "1.98.0"
+    }
   }
 }
