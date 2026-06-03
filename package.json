@@ -91,7 +91,6 @@
   },
   "pnpm": {
     "overrides": {
-      "@solana/web3.js": "1.98.0",
       "rpc-websockets": "7.11.0"
     }
   }
