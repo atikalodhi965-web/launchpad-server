@@ -1,4 +1,6 @@
 // File: src/index.ts
+import 'ws';
+import '@solana/web3.js';
 import express, { Request, Response } from 'express';
 import {
   TokenParams,
