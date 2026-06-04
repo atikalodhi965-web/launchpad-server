@@ -92,7 +92,8 @@
   },
   "pnpm": {
     "overrides": {
-      "@solana/web3.js": "1.98.0"
+      "@solana/web3.js": "1.98.0",
+      "uuid": "11.1.0"
     }
   }
 }

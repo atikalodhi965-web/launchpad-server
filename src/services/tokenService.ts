@@ -6,11 +6,11 @@ import { addVideoToPipeline } from '../redis/videoQueue';
 import { v4 as uuidv4 } from 'uuid';
 import { MeteoraDBCService } from '../service/MeteoraDBC/meteoraDBCService';
 import { getConnection } from '../utils/connection';
-import { 
-  calculateTokenPrice, 
-  calculateMarketCap, 
-  calculateCirculatingSupply, 
-  parseRawAmount 
+import {
+  calculateTokenPrice,
+  calculateMarketCap,
+  calculateCirculatingSupply,
+  parseRawAmount
 } from '../utils/tokenStats';
 
 export interface FinalizeTokenParams {
@@ -102,21 +102,21 @@ export async function finalizeTokenService(
         const connection = getConnection('confirmed');
         const meteoraService = new MeteoraDBCService(connection);
         const poolRes = await meteoraService.getPoolState(poolAddress);
-        
+
         if (poolRes.success && poolRes.pool) {
           const pool = poolRes.pool;
           // Reserves are returned as hex strings without 0x in some cases
           solReserves = parseRawAmount(pool.quoteReserve);
           tokenReserves = parseRawAmount(pool.baseReserve);
-          
+
           currentPrice = calculateTokenPrice(pool.baseReserve, pool.quoteReserve);
-          
+
           const circulatingSupply = calculateCirculatingSupply(totalSupplyValue, pool.baseReserve);
-          
+
           // If circulating supply is 0, it means no tokens have been bought yet.
           // Use total supply for market cap as requested.
           const noSwaps = circulatingSupply === 0;
-          
+
           marketCap = calculateMarketCap(currentPrice, circulatingSupply, noSwaps, totalSupplyValue);
         }
       } catch (poolErr) {
@@ -148,6 +148,7 @@ export async function finalizeTokenService(
       market_cap: marketCap,
       bonding_target_amount: 100, // Default target 100 SOL
       bonding_current_amount: 0,
+      bonding_progress: 0,
     });
 
     // coin_media (Main record)
@@ -182,7 +183,7 @@ export async function finalizeTokenService(
       coin_id: mintAddress,
       creator_id: creatorId,
       is_shareable: true,
-      tx_id: txHash, 
+      tx_id: txHash,
     });
     // creator_earnings
     await trx('creator_earnings').insert({
@@ -192,11 +193,11 @@ export async function finalizeTokenService(
       total_claimed: 0,
       unclaimed: 0,
     });
-    
+
     if (!isTransaction) {
       await trx.commit();
     }
-    
+
     // Clear redis cache for new tokens
     try {
       await redisClient.del('tokens:new');
@@ -281,7 +282,7 @@ export async function finalizeTokenWithBuy(
 
     // 4. update coins table with current price and market cap
     const totalSupplyValue = 1_000_000_000;
-    
+
     // After a buy, circulating supply is at least tokensReceived
     // We can fetch the latest pool state to get accurate reserves and circulating supply
     let solReserves = 0;
@@ -293,15 +294,15 @@ export async function finalizeTokenWithBuy(
         const connection = getConnection('confirmed');
         const meteoraService = new MeteoraDBCService(connection);
         const poolRes = await meteoraService.getPoolState(params.poolAddress);
-        
+
         if (poolRes.success && poolRes.pool) {
           const pool = poolRes.pool;
           solReserves = parseRawAmount(pool.quoteReserve);
           tokenReserves = parseRawAmount(pool.baseReserve);
-          
+
           const circulatingSupply = calculateCirculatingSupply(totalSupplyValue, pool.baseReserve);
           const noSwaps = circulatingSupply === 0;
-          
+
           finalMarketCap = calculateMarketCap(price, circulatingSupply, noSwaps, totalSupplyValue);
 
           // Update liquidity pool table
@@ -317,7 +318,7 @@ export async function finalizeTokenWithBuy(
         console.error('Error fetching pool state during finalizeWithBuy:', poolErr);
       }
     }
-    
+
     await trx('coins')
       .where({ id: mintAddress })
       .update({
@@ -325,7 +326,8 @@ export async function finalizeTokenWithBuy(
         market_cap: finalMarketCap,
         bonding_current_amount: trx.raw('bonding_current_amount + ?', [buyAmount]),
         // Update bonding progress: buyAmount / target (e.g. 100 SOL target)
-        bonding_progress: Math.min(100, (buyAmount / 100) * 100) // Default target 100
+        // For now using a placeholder or 100 SOL as default target
+        bonding_progress: trx.raw('LEAST(100, (bonding_current_amount + ?) / 100 * 100)', [buyAmount])
       });
 
 
@@ -368,13 +370,13 @@ export async function finalizeTokenWithBuy(
 
 
 export async function getTokensService(params: any) {
-  const { 
-    category = 'new', 
-    limit = 10, 
-    offset = 0, 
-    sortBy = 'created_at', 
+  const {
+    category = 'new',
+    limit = 10,
+    offset = 0,
+    sortBy = 'created_at',
     hasVideo = false,
-    search = '' 
+    search = ''
   } = params;
 
   let query = knex('coins')
@@ -389,9 +391,9 @@ export async function getTokensService(params: any) {
 
   // SEARCH
   if (search) {
-    query.where(function() {
+    query.where(function () {
       this.where('coins.name', 'ilike', `%${search}%`)
-          .orWhere('coins.symbol', 'ilike', `%${search}%`);
+        .orWhere('coins.symbol', 'ilike', `%${search}%`);
     });
   }
 
@@ -400,7 +402,7 @@ export async function getTokensService(params: any) {
     // For movers, we want to show all active tokens but PRIORITIZE those meeting conditions:
     // priceChange24h >= 5% OR volume24h >= $10k OR txCount24h >= 100
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    
+
     // Join with a subquery to get 24h transaction counts
     query.leftJoin(
       knex('trades')
@@ -412,7 +414,7 @@ export async function getTokensService(params: any) {
       'coins.id',
       'tx_stats.coin_id'
     )
-    .whereIn('coins.status', ['launching', 'migrated', 'live']);
+      .whereIn('coins.status', ['launching', 'migrated', 'live']);
 
     // Add a priority sort: tokens meeting any mover criteria come first
     // We use a CASE statement or raw boolean sort
@@ -427,17 +429,17 @@ export async function getTokensService(params: any) {
     // New: createdAt >= now - 24 hours
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     query.where('coins.created_at', '>=', twentyFourHoursAgo)
-         .whereIn('coins.status', ['launching', 'migrated', 'live']);
+      .whereIn('coins.status', ['launching', 'migrated', 'live']);
   } else if (category === 'launching') {
     // Launching: bonding curve >= 90% and status is launching
     query.where('coins.status', 'launching')
-         .andWhere('coins.bonding_progress', '>=', 90)
-         .andWhere('coins.bonding_progress', '<', 100);
+      .andWhere('coins.bonding_progress', '>=', 90)
+      .andWhere('coins.bonding_progress', '<', 100);
   } else if (category === 'migrated') {
     // Migrated: bonding curve === 100% or status is migrated
-    query.where(function() {
+    query.where(function () {
       this.where('coins.status', 'migrated')
-          .orWhere('coins.bonding_progress', '>=', 100);
+        .orWhere('coins.bonding_progress', '>=', 100);
     });
   } else {
     // Default: all active tokens
@@ -460,8 +462,8 @@ export async function getTokensService(params: any) {
       'coins.id',
       'lt.coin_id'
     )
-    .select('lt.last_trade_at')
-    .orderByRaw('lt.last_trade_at DESC NULLS LAST');
+      .select('lt.last_trade_at')
+      .orderByRaw('lt.last_trade_at DESC NULLS LAST');
   } else if (sortBy === 'marketCap' || sortBy === 'market_cap') {
     query.orderBy('coins.market_cap', 'desc');
   } else if (sortBy === 'volume_24h' || sortBy === 'trading_volume') {
@@ -496,14 +498,6 @@ export async function getTokenDetailsService(coinId: string) {
       .leftJoin('coin_media', 'coins.id', 'coin_media.coin_id')
       .select(
         'coins.*',
-        'coins.bonding_progress',
-        'coins.bonding_current_amount',
-        'coins.bonding_target_amount',
-        'coins.volume_1m',
-        'coins.volume_5m',
-        'coins.volume_1h',
-        'coins.volume_6h',
-        'coins.volume_24h',
         'users.username as creator_name',
         'users.profile_image_url as creator_image',
         'coin_media.video_url',
@@ -550,19 +544,22 @@ export async function getTopHoldersService(coinId: string, limit: number = 50) {
     const currentPrice = parseFloat(coin.current_price || '0');
     const totalSupply = parseFloat(coin.total_supply || '0');
 
-    let query = knex('coin_holders')
-      .leftJoin('users', 'coin_holders.user_id', 'users.id')
+    let query = knex('user_coins')
+      .leftJoin('users', 'user_coins.user_id', 'users.id')
+      .leftJoin('wallets', function () {
+        this.on('users.id', '=', 'wallets.user_id')
+          .andOn('wallets.is_primary', '=', knex.raw('?', [true]))
+      })
       .select(
-        'coin_holders.user_id',
-        'coin_holders.tokens_held',
-        'coin_holders.value_usd',
-        'coin_holders.wallet_address',
+        'user_coins.user_id',
+        'user_coins.tokens_held',
         'users.username',
-        'users.profile_image_url'
+        'users.profile_image_url',
+        'wallets.address as wallet_address'
       )
-      .where('coin_holders.coin_id', coinId)
-      .andWhere('coin_holders.tokens_held', '>', 0)
-      .orderBy('coin_holders.tokens_held', 'desc');
+      .where('user_coins.coin_id', coinId)
+      .andWhere('user_coins.tokens_held', '>', 0)
+      .orderBy('user_coins.tokens_held', 'desc');
 
     if (limit !== -1) {
       query = query.limit(limit);

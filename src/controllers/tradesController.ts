@@ -97,10 +97,10 @@ export async function getChartData(req: Request, res: Response) {
     
     const charts = await knex('coin_charts')
       .where({ coin_id: coinId, timeframe: timeframe as string })
-      .orderBy('period_start', 'asc')
+      .orderBy('period_start', 'desc')
       .limit(Number(limit));
       
-    res.json({ success: true, data: charts });
+    res.json({ success: true, data: charts.reverse() });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
