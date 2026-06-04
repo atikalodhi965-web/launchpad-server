@@ -146,7 +146,8 @@ export async function finalizeTokenService(
       total_supply: totalSupplyValue,
       current_price: currentPrice,
       market_cap: marketCap,
-      // tx_hash: txHash,  // Added tx_hash
+      bonding_target_amount: 100, // Default target 100 SOL
+      bonding_current_amount: 0,
     });
 
     // coin_media (Main record)
@@ -324,8 +325,7 @@ export async function finalizeTokenWithBuy(
         market_cap: finalMarketCap,
         bonding_current_amount: trx.raw('bonding_current_amount + ?', [buyAmount]),
         // Update bonding progress: buyAmount / target (e.g. 100 SOL target)
-        // For now using a placeholder or 100 SOL as default target
-        bonding_progress: trx.raw('LEAST(100, (bonding_current_amount + ?) / 100 * 100)', [buyAmount])
+        bonding_progress: Math.min(100, (buyAmount / 100) * 100) // Default target 100
       });
 
 
@@ -496,6 +496,14 @@ export async function getTokenDetailsService(coinId: string) {
       .leftJoin('coin_media', 'coins.id', 'coin_media.coin_id')
       .select(
         'coins.*',
+        'coins.bonding_progress',
+        'coins.bonding_current_amount',
+        'coins.bonding_target_amount',
+        'coins.volume_1m',
+        'coins.volume_5m',
+        'coins.volume_1h',
+        'coins.volume_6h',
+        'coins.volume_24h',
         'users.username as creator_name',
         'users.profile_image_url as creator_image',
         'coin_media.video_url',
@@ -532,7 +540,7 @@ export async function getTokenDetailsService(coinId: string) {
   }
 }
 
-export async function getTopHoldersService(coinId: string, limit: number = 10) {
+export async function getTopHoldersService(coinId: string, limit: number = 50) {
   try {
     const coin = await knex('coins').where({ id: coinId }).first();
     if (!coin) {
@@ -542,23 +550,25 @@ export async function getTopHoldersService(coinId: string, limit: number = 10) {
     const currentPrice = parseFloat(coin.current_price || '0');
     const totalSupply = parseFloat(coin.total_supply || '0');
 
-    const holders = await knex('user_coins')
-      .leftJoin('users', 'user_coins.user_id', 'users.id')
-      .leftJoin('wallets', function() {
-        this.on('users.id', '=', 'wallets.user_id')
-            .andOn('wallets.is_primary', '=', knex.raw('?', [true]))
-      })
+    let query = knex('coin_holders')
+      .leftJoin('users', 'coin_holders.user_id', 'users.id')
       .select(
-        'user_coins.user_id',
-        'user_coins.tokens_held',
+        'coin_holders.user_id',
+        'coin_holders.tokens_held',
+        'coin_holders.value_usd',
+        'coin_holders.wallet_address',
         'users.username',
-        'users.profile_image_url',
-        'wallets.address as wallet_address'
+        'users.profile_image_url'
       )
-      .where('user_coins.coin_id', coinId)
-      .andWhere('user_coins.tokens_held', '>', 0)
-      .orderBy('user_coins.tokens_held', 'desc')
-      .limit(limit);
+      .where('coin_holders.coin_id', coinId)
+      .andWhere('coin_holders.tokens_held', '>', 0)
+      .orderBy('coin_holders.tokens_held', 'desc');
+
+    if (limit !== -1) {
+      query = query.limit(limit);
+    }
+
+    const holders = await query;
 
     const formattedHolders = holders.map(h => {
       const tokensHeld = parseFloat(h.tokens_held || '0');

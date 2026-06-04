@@ -122,8 +122,19 @@ export async function recordSwap(req: Request, res: Response) {
     poolAddress // Should be passed from frontend
   } = req.body;
 
-  if (!userId || !coinId || !type || !price || !txHash) {
-    return res.status(400).json({ success: false, error: 'Missing required parameters' });
+  if (!userId || !coinId || !type || price === undefined || isNaN(price) || !txHash) {
+    console.error('RecordSwap 400 - Missing params:', {
+      userId: !!userId,
+      coinId: !!coinId,
+      type: !!type,
+      price: price !== undefined,
+      txHash: !!txHash
+    });
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Missing required parameters', 
+      details: { userId, coinId, type, price, txHash } 
+    });
   }
 
   const trx = await knex.transaction();
@@ -188,9 +199,10 @@ export async function recordSwap(req: Request, res: Response) {
     }
 
     // 3. Calculate volumes and price change (using utils as in sync-stats)
-    const [vol1m, vol5m, vol6h, vol24h, pct24h] = await Promise.all([
+    const [vol1m, vol5m, vol1h, vol6h, vol24h, pct24h] = await Promise.all([
       getVolumeForTimeframe(coinId, 1),
       getVolumeForTimeframe(coinId, 5),
+      getVolumeForTimeframe(coinId, 60),
       getVolumeForTimeframe(coinId, 360),
       getVolumeForTimeframe(coinId, 1440),
       getPriceChangePercentage(coinId, 1440, latestPrice)
@@ -205,19 +217,22 @@ export async function recordSwap(req: Request, res: Response) {
         circulating_supply: latestCirculatingSupply,
         volume_1m: vol1m,
         volume_5m: vol5m,
+        volume_1h: vol1h,
         volume_6h: vol6h,
         volume_24h: vol24h,
         price_change_24h: pct24h,
       };
 
       // Add bonding curve updates
+      const target = Math.max(1, parseFloat(coin.bonding_target_amount || 100));
+      const current = parseFloat(coin.bonding_current_amount || 0);
+      
       if (type === 'buy') {
-        updateData.bonding_current_amount = trx.raw('bonding_current_amount + ?', [usdValue]);
-        // Update bonding_progress: (current + added) / target(100) * 100
-        updateData.bonding_progress = trx.raw('LEAST(100, (COALESCE(bonding_current_amount, 0) + ?) / 100 * 100)', [usdValue]);
+        updateData.bonding_current_amount = trx.raw('COALESCE(bonding_current_amount, 0) + ?', [usdValue]);
+        updateData.bonding_progress = Math.min(100, ((current + parseFloat(usdValue)) / target) * 100);
       } else if (type === 'sell') {
-        updateData.bonding_current_amount = trx.raw('GREATEST(0, bonding_current_amount - ?)', [usdValue]);
-        updateData.bonding_progress = trx.raw('GREATEST(0, (COALESCE(bonding_current_amount, 0) - ?) / 100 * 100)', [usdValue]);
+        updateData.bonding_current_amount = trx.raw('GREATEST(0, COALESCE(bonding_current_amount, 0) - ?)', [usdValue]);
+        updateData.bonding_progress = Math.max(0, ((current - parseFloat(usdValue)) / target) * 100);
       }
 
       // Update ATH if needed

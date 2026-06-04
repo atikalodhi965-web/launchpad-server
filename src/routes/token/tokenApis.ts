@@ -30,7 +30,7 @@ tokenApiRouter.get('/details/:coinId', async (req, res) => {
 
 tokenApiRouter.get('/holders/:coinId', async (req, res) => {
   const { coinId } = req.params;
-  const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+  const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
   const result = await getTopHoldersService(coinId, limit);
   res.json(result);
 });
