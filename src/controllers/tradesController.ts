@@ -282,6 +282,7 @@ export async function recordSwap(req: Request, res: Response) {
 
       await trx('user_coins').where({ id: userCoin.id }).update({
         tokens_held: newTotalTokens,
+        realized_pnl: trx.raw('COALESCE(realized_pnl, 0) + ?', [profit]),
         updated_at: trx.fn.now()
       });
     }

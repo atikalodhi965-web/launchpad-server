@@ -116,13 +116,38 @@ export const getCoinsHeld: RequestHandler = async (req, res) => {
         'coins.logo_url',
         'coins.current_price',
         'coins.market_cap',
+        'coins.price_change_24h',
         'user_coins.tokens_held',
-        'user_coins.avg_buy_price'
+        'user_coins.avg_buy_price',
+        'user_coins.realized_pnl'
       );
+
+    const formattedCoins = coinsHeld.map((coin: any) => {
+      const tokensHeld = parseFloat(coin.tokens_held || 0);
+      const avgBuyPrice = parseFloat(coin.avg_buy_price || 0);
+      const currentPrice = parseFloat(coin.current_price || 0);
+      
+      const totalCost = tokensHeld * avgBuyPrice;
+      const currentValue = tokensHeld * currentPrice;
+      const unrealizedPnl = currentValue - totalCost;
+      
+      // Calculate PnL percentage (unrealized)
+      const pnlPercentage = totalCost > 0 ? (unrealizedPnl / totalCost) * 100 : 0;
+
+      return {
+        ...coin,
+        tokens_held: tokensHeld,
+        avg_buy_price: avgBuyPrice,
+        current_price: currentPrice,
+        unrealized_pnl: unrealizedPnl,
+        pnl_percentage: pnlPercentage,
+        realized_pnl: parseFloat(coin.realized_pnl || 0)
+      };
+    });
 
     res.json({
       success: true,
-      data: coinsHeld,
+      data: formattedCoins,
     });
     return;
   } catch (error: any) {
