@@ -1,4 +1,9 @@
 import knex from '../db/knex';
+import dns from "dns";
+dns.setDefaultResultOrder("ipv4first");
+dns.lookup("smtp.gmail.com", { all: true }, (err, addresses) => {
+  console.log("SMTP addresses:", addresses);
+});
 import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
 import twilio from 'twilio';
