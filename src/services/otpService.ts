@@ -11,6 +11,9 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000,
 });
 
 // SMS configuration
@@ -44,6 +47,11 @@ export const sendSMSOTP = async (phone: string, code: string) => {
 export const sendEmailOTP = async (email: string, code: string) => {
   console.log(`[Email Service] Sending OTP ${code} to ${email}`);
   try {
+    console.log("Testing SMTP connection");
+
+    await transporter.verify();
+
+    console.log("SMTP connection successful");
     await transporter.sendMail({
       from: `"MoonPad" <${process.env.EMAIL_FROM || 'noreply@moonpad.com'}>`,
       to: email,
@@ -100,7 +108,7 @@ export const checkOTPVerified = async (identifier: string): Promise<boolean> => 
   const otp = await knex('otps')
     .where({ identifier, verified: true })
     .first();
-  
+
   if (otp) {
     // Optionally delete it after checking to ensure it's only used once
     await knex('otps').where({ id: otp.id }).del();
