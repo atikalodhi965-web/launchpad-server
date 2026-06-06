@@ -10,22 +10,37 @@ import twilio from 'twilio';
 
 
 // Email configuration
-const isSecure = process.env.EMAIL_PORT === '465';
-const transporter = nodemailer.createTransport({
+const isGmail = process.env.EMAIL_HOST?.includes('gmail');
+const transporterConfig: any = isGmail ? {
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+} : {
   host: process.env.EMAIL_HOST,
   port: parseInt(process.env.EMAIL_PORT || '587'),
-  secure: isSecure,
+  secure: process.env.EMAIL_PORT === '465',
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    // Do not fail on invalid certs
     rejectUnauthorized: false,
   },
-  connectionTimeout: 10000, // 10 seconds is usually enough
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
+};
+
+// Add connection pooling and timeouts
+const transporter = nodemailer.createTransport({
+  ...transporterConfig,
+  pool: true,
+  maxConnections: 5,
+  maxMessages: 100,
+  connectionTimeout: 20000, // 20 seconds
+  greetingTimeout: 20000,
+  socketTimeout: 30000,
+  logger: true, // Enable logging
+  debug: true,  // Enable debug output
 });
 
 
