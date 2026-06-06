@@ -33,7 +33,7 @@ const transporterConfig: any = isGmail ? {
 // Add connection pooling and timeouts
 const transporter = nodemailer.createTransport({
   ...transporterConfig,
-  pool: true,
+  // pool: true,
   maxConnections: 5,
   maxMessages: 100,
   connectionTimeout: 20000, // 20 seconds
