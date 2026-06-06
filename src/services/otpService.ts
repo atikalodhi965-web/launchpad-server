@@ -8,20 +8,28 @@ import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
 import twilio from 'twilio';
 
+
 // Email configuration
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
-  port: parseInt(process.env.EMAIL_PORT || '465'),
-  secure: true,
-  family: 4, // Force IPv4
+  port: 587,
+  secure: false,
+
+  // family: 4, // Force IPv4
+
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false,
   },
   connectionTimeout: 30000,
   greetingTimeout: 30000,
   socketTimeout: 30000,
 });
+
+
 
 // SMS configuration
 const twilioClient = twilio(
