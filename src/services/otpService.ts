@@ -1,33 +1,11 @@
 import knex from '../db/knex';
-import dns from "dns";
-dns.setDefaultResultOrder("ipv4first");
-dns.lookup("smtp.gmail.com", { all: true }, (err, addresses) => {
-  console.log("SMTP addresses:", addresses);
-});
 import { v4 as uuidv4 } from 'uuid';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import twilio from 'twilio';
 
 
-// Email configuration
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: 587,
-  secure: false,
-
-  // family: 4, // Force IPv4
-
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false,
-  },
-  connectionTimeout: 30000,
-  greetingTimeout: 30000,
-  socketTimeout: 30000,
-});
+// Resend configuration
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 
 
@@ -54,21 +32,16 @@ export const sendSMSOTP = async (phone: string, code: string) => {
   } catch (error) {
     console.error('[sendSMSOTP error]', error);
     // In dev mode, we might want to return true even if it fails but log it
-    if (process.env.NODE_ENV === 'development') return true;
-    throw error;
+    // if (process.env.NODE_ENV === 'development') return true;
+    // throw error;
   }
 };
 
 export const sendEmailOTP = async (email: string, code: string) => {
   console.log(`[Email Service] Sending OTP ${code} to ${email}`);
   try {
-    console.log("Testing SMTP connection");
-
-    await transporter.verify();
-
-    console.log("SMTP connection successful");
-    await transporter.sendMail({
-      from: `"MoonPad" <${process.env.EMAIL_FROM || 'noreply@moonpad.com'}>`,
+    const { data, error } = await resend.emails.send({
+      from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
       to: email,
       subject: 'Your MoonPad Verification Code',
       text: `Your MoonPad verification code is: ${code}. It expires in 10 minutes.`,
@@ -84,11 +57,17 @@ export const sendEmailOTP = async (email: string, code: string) => {
         </div>
       `,
     });
+
+    if (error) {
+      console.error('[sendEmailOTP error]', error);
+      return false;
+    }
+
+    console.log('[Email Service] Email sent successfully:', data?.id);
     return true;
   } catch (error) {
-    console.error('[sendEmailOTP error]', error);
-    if (process.env.NODE_ENV === 'development') return true;
-    throw error;
+    console.error('[sendEmailOTP unexpected error]', error);
+    return false;
   }
 };
 
