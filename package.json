@@ -21,6 +21,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1027.0",
     "@coinbase/cdp-sdk": "^1.45.0",
     "@coral-xyz/anchor": "^0.30.1",
+    "@getbrevo/brevo": "^6.0.2",
     "@google-cloud/storage": "^7.15.2",
     "@metaplex-foundation/mpl-core": "^1.4.0",
     "@metaplex-foundation/mpl-token-metadata": "^3.4.0",

@@ -1,11 +1,13 @@
 import knex from '../db/knex';
 import { v4 as uuidv4 } from 'uuid';
-import { Resend } from 'resend';
+import { BrevoClient } from '@getbrevo/brevo';
 import twilio from 'twilio';
 
 
-// Resend configuration
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Brevo configuration
+const brevoClient = new BrevoClient({
+  apiKey: process.env.BREVO_API_KEY || ''
+});
 
 
 
@@ -40,12 +42,15 @@ export const sendSMSOTP = async (phone: string, code: string) => {
 export const sendEmailOTP = async (email: string, code: string) => {
   console.log(`[Email Service] Sending OTP ${code} to ${email}`);
   try {
-    const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
-      to: email,
+    const response = await brevoClient.transactionalEmails.sendTransacEmail({
+      sender: {
+        name: 'MoonPad',
+        email: process.env.EMAIL_FROM || 'no-reply@moonpad.xyz'
+      },
+      to: [{ email }],
       subject: 'Your MoonPad Verification Code',
-      text: `Your MoonPad verification code is: ${code}. It expires in 10 minutes.`,
-      html: `
+      textContent: `Your MoonPad verification code is: ${code}. It expires in 10 minutes.`,
+      htmlContent: `
         <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
           <h2>Welcome to MoonPad</h2>
           <p>Use the following code to verify your identity:</p>
@@ -58,15 +63,10 @@ export const sendEmailOTP = async (email: string, code: string) => {
       `,
     });
 
-    if (error) {
-      console.error('[sendEmailOTP error]', error);
-      return false;
-    }
-
-    console.log('[Email Service] Email sent successfully:', data?.id);
+    console.log('[Email Service] Email sent successfully via Brevo:', response);
     return true;
   } catch (error) {
-    console.error('[sendEmailOTP unexpected error]', error);
+    console.error('[sendEmailOTP error]', error);
     return false;
   }
 };
